@@ -19,7 +19,9 @@ CREATE TABLE IF NOT EXISTS processed_files (
     status              TEXT    NOT NULL,       -- 'success' | 'failed'
     processed_at        TEXT    NOT NULL,
     transcription_text  TEXT,                   -- 豆包转写结果缓存
-    ai_result_json      TEXT                    -- ProcessedMemo 序列化（JSON）
+    ai_result_json      TEXT,                   -- ProcessedMemo 序列化（JSON）
+    memo_title          TEXT,                   -- iOS 语音备忘录显示的文件名
+    duration_seconds    REAL                    -- 录音时长（秒）
 )
 """
 
@@ -27,6 +29,8 @@ CREATE TABLE IF NOT EXISTS processed_files (
 MIGRATE_SQLS = [
     "ALTER TABLE processed_files ADD COLUMN transcription_text TEXT",
     "ALTER TABLE processed_files ADD COLUMN ai_result_json TEXT",
+    "ALTER TABLE processed_files ADD COLUMN memo_title TEXT",
+    "ALTER TABLE processed_files ADD COLUMN duration_seconds REAL",
 ]
 
 
@@ -81,6 +85,24 @@ def get_ai_result(path: Path):
         return None
     data = json.loads(row["ai_result_json"])
     return ProcessedMemo(**data)
+
+
+def save_file_info(path: Path, memo_title: Optional[str], duration_seconds: Optional[float]) -> None:
+    """保存录音的文件名和时长（upsert）。"""
+    size = path.stat().st_size if path.exists() else 0
+    now = datetime.now().isoformat()
+    with _connect() as conn:
+        conn.execute(
+            """
+            INSERT INTO processed_files (file_path, file_size, status, processed_at, memo_title, duration_seconds)
+            VALUES (?, ?, 'pending', ?, ?, ?)
+            ON CONFLICT(file_path) DO UPDATE SET
+                memo_title       = excluded.memo_title,
+                duration_seconds = excluded.duration_seconds
+            """,
+            (str(path), size, now, memo_title, duration_seconds)
+        )
+    logger.debug("文件信息已记录: %s", path.name)
 
 
 def save_transcription(path: Path, text: str) -> None:

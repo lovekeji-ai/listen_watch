@@ -12,6 +12,7 @@ from listen_watch.watcher import VoiceMemoWatcher
 from listen_watch.db import (
     init_db, is_processed, mark_success, mark_failed, get_unprocessed,
     get_transcription, get_ai_result, save_transcription, save_ai_result,
+    save_file_info,
 )
 
 load_dotenv()
@@ -149,6 +150,8 @@ def on_new_memo(path: Path) -> None:
         logger.info(">>> 新备忘录就绪: %s (%.1f KB, %d:%02d)", path.name, size_kb, minutes, seconds)
     else:
         logger.info(">>> 新备忘录就绪: %s (%.1f KB, 时长未知)", path.name, size_kb)
+
+    save_file_info(path, get_memo_title(path), duration)
 
     if MAX_TRANSCRIBE_MINUTES > 0 and duration is not None and duration > MAX_TRANSCRIBE_MINUTES * 60:
         logger.info(
