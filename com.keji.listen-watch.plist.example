@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 唯一标识符 -->
+    <key>Label</key>
+    <string>com.keji.listen-watch</string>
+
+    <!-- 启动命令：使用系统真实 python3 二进制，PYTHONPATH 指向 venv -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/bin/python3</string>
+        <string>YOUR_HOME/Code/listen_watch/main.py</string>
+    </array>
+
+    <!-- 让 python3 使用 venv 里安装的包 -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PYTHONPATH</key>
+        <string>YOUR_HOME/Code/listen_watch/.venv/lib/python3.9/site-packages</string>
+    </dict>
+
+    <!-- 工作目录（.env 文件从这里加载） -->
+    <key>WorkingDirectory</key>
+    <string>YOUR_HOME/Code/listen_watch</string>
+
+    <!-- 登录后自动启动 -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- 崩溃后自动重启 -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!-- 标准输出写入运行日志 -->
+    <key>StandardOutPath</key>
+    <string>YOUR_HOME/.listen_watch/listen_watch.log</string>
+
+    <!-- 标准错误写入错误日志 -->
+    <key>StandardErrorPath</key>
+    <string>YOUR_HOME/.listen_watch/error.log</string>
+</dict>
+</plist>

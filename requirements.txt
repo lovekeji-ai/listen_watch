@@ -2,3 +2,6 @@ watchdog>=4.0.0
 openai-whisper>=20231117
 anthropic>=0.40.0
 python-dotenv>=1.0.0
+mutagen>=1.47.0
+oss2>=2.18.0
+openai>=1.0.0

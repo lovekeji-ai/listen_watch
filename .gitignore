@@ -34,3 +34,5 @@ logs/
 
 # Project specific
 processed/
+# 实际 plist 含本机路径，不提交；使用 install.sh 生成
+com.keji.listen-watch.plist
