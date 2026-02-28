@@ -57,6 +57,37 @@ RETRY_DELAYS = [5, 15, 45]  # 指数退避间隔（秒）
 
 
 # ── 工具函数 ──────────────────────────────────────────────────────
+def ensure_directory_readable(path: Path, label: str) -> None:
+    """校验目录存在且可读，失败时抛出带指引的异常。"""
+    expanded = path.expanduser()
+    if not expanded.exists():
+        raise FileNotFoundError(f"{label}不存在: {expanded}")
+    try:
+        next(expanded.iterdir(), None)
+    except PermissionError as e:
+        raise PermissionError(
+            f"{label}无读取权限: {expanded}。"
+            "请在 macOS 系统设置 -> 隐私与安全性 中为运行该程序的 Python/终端/启动代理授予 Full Disk Access，"
+            "并确认该目录已允许访问。"
+        ) from e
+
+
+def ensure_file_read_write(path: Path, label: str) -> None:
+    """校验目标文件可读写，失败时抛出带指引的异常。"""
+    expanded = path.expanduser()
+    if not expanded.exists():
+        raise FileNotFoundError(f"{label}不存在: {expanded}")
+    try:
+        with expanded.open("r+", encoding="utf-8"):
+            pass
+    except PermissionError as e:
+        raise PermissionError(
+            f"{label}无读写权限: {expanded}。"
+            "请在 macOS 系统设置 -> 隐私与安全性 中为运行该程序的 Python/终端/启动代理授予 Documents/Full Disk Access 权限，"
+            "或将 Obsidian 仓库移动到无额外权限限制的位置。"
+        ) from e
+
+
 def parse_recorded_at(path: Path) -> Optional[datetime]:
     """从文件名解析录制时间，格式 YYYYMMDD HHMMSS-...，失败返回 None。"""
     m = re.match(r"(\d{8})\s(\d{6})", path.stem)
@@ -184,6 +215,14 @@ def on_new_memo(path: Path) -> None:
 if __name__ == "__main__":
     init_db()
     logger.info("listen_watch 启动")
+    try:
+        ensure_directory_readable(Path(VOICE_MEMOS_DIR), "Voice Memos 监听目录")
+        journal_probe_date = datetime.now()
+        ensure_directory_readable(Path(os.getenv("OBSIDIAN_JOURNAL_DIR", "")).expanduser(), "Obsidian 日记目录")
+        from listen_watch.obsidian import _journal_path
+        ensure_file_read_write(_journal_path(journal_probe_date), "当天 Obsidian 日记文件")
+    except (PermissionError, FileNotFoundError) as e:
+        logger.warning("启动校验未通过（将在运行中重试）: %s", e)
 
     # 补处理启动前遗漏的文件
     missed = get_unprocessed(Path(VOICE_MEMOS_DIR))

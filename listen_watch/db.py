@@ -177,7 +177,13 @@ def get_unprocessed(directory: Path) -> list:
                 "SELECT file_path FROM processed_files WHERE status = 'success'"
             ).fetchall()
         }
+    try:
+        files = list(directory.iterdir())
+    except PermissionError as e:
+        import logging
+        logging.getLogger(__name__).warning("无法扫描目录，跳过补处理: %s", e)
+        return []
     return sorted(
-        p for p in directory.iterdir()
+        p for p in files
         if p.suffix.lower() in WATCH_EXTENSIONS and str(p) not in done
     )

@@ -77,8 +77,17 @@ class VoiceMemoWatcher:
             logger.info("监听已停止")
 
     def run_forever(self):
-        """阻塞运行，直到 KeyboardInterrupt。"""
-        self.start()
+        """阻塞运行，直到 KeyboardInterrupt。权限不足时每 30 秒重试一次。"""
+        while True:
+            try:
+                self.start()
+                break
+            except (FileNotFoundError, PermissionError, OSError) as e:
+                logger.warning("无法启动监听，30 秒后重试: %s", e)
+                try:
+                    time.sleep(30)
+                except KeyboardInterrupt:
+                    return
         try:
             while True:
                 time.sleep(1)

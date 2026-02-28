@@ -6,19 +6,12 @@
     <key>Label</key>
     <string>com.keji.listen-watch</string>
 
-    <!-- 启动命令：使用系统真实 python3 二进制，PYTHONPATH 指向 venv -->
+    <!-- 启动命令：直接使用 venv python（已含所有依赖包） -->
     <key>ProgramArguments</key>
     <array>
-        <string>/usr/bin/python3</string>
+        <string>YOUR_HOME/Code/listen_watch/.venv/bin/python3</string>
         <string>YOUR_HOME/Code/listen_watch/main.py</string>
     </array>
-
-    <!-- 让 python3 使用 venv 里安装的包 -->
-    <key>EnvironmentVariables</key>
-    <dict>
-        <key>PYTHONPATH</key>
-        <string>YOUR_HOME/Code/listen_watch/.venv/lib/python3.9/site-packages</string>
-    </dict>
 
     <!-- 工作目录（.env 文件从这里加载） -->
     <key>WorkingDirectory</key>
@@ -30,6 +23,10 @@
 
     <!-- 崩溃后自动重启 -->
     <key>KeepAlive</key>
+    <true/>
+
+    <!-- 创建用户会话，使进程获得 TCC/FDA 权限（macOS Sequoia 必需） -->
+    <key>SessionCreate</key>
     <true/>
 
     <!-- 标准输出写入运行日志 -->
