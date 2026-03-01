@@ -1,5 +1,7 @@
 import os
 import logging
+import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -9,6 +11,7 @@ logger = logging.getLogger(__name__)
 JOURNAL_DIR = os.getenv("OBSIDIAN_JOURNAL_DIR", "")
 DATE_FORMAT = os.getenv("OBSIDIAN_DATE_FORMAT", "%Y-%m-%d")
 SECTION_HEADING = "## 语音记录"
+VAULT_DIR = os.getenv("OBSIDIAN_VAULT_DIR", "")
 
 
 def _journal_path(date: Optional[datetime] = None) -> Path:
@@ -43,16 +46,59 @@ def _format_entry(memo, recorded_at: Optional[datetime] = None) -> str:
     return "\n".join(lines)
 
 
+def ensure_journal_exists(date: Optional[datetime] = None) -> Path:
+    """
+    确保当天日记文件存在。
+    1. 先尝试通过 Obsidian URI scheme 触发内置 Daily Notes 插件创建（需 Obsidian 在运行）
+    2. 等待最多 10 秒让文件出现
+    3. 超时则自动创建最简 .md 文件作为兜底
+    返回日记文件路径（文件必然存在）。
+    """
+    path = _journal_path(date)
+    if path.exists():
+        return path
+
+    logger.info("当天日记文件不存在，尝试通过 Obsidian 创建: %s", path)
+
+    # 从 OBSIDIAN_VAULT_DIR 推断 Vault 名称（URI 需要）
+    vault_name = Path(VAULT_DIR).name if VAULT_DIR else ""
+    uri = "obsidian://daily-notes"
+    if vault_name:
+        uri += f"?vault={vault_name}"
+
+    try:
+        subprocess.run(["open", uri], check=True, timeout=5)
+        logger.info("已触发 Obsidian Daily Notes 插件: %s", uri)
+
+        # 轮询等待 Obsidian 创建文件，最多等待 10 秒
+        for _ in range(20):
+            time.sleep(0.5)
+            if path.exists():
+                logger.info("Obsidian 已创建日记文件: %s", path.name)
+                return path
+
+        logger.warning("等待 Obsidian 创建日记超时（10s），改为自动创建")
+    except Exception as e:
+        logger.warning("触发 Obsidian URI 失败: %s，改为自动创建", e)
+
+    # 兜底：创建最简 .md 文件
+    d = date or datetime.now()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(f"# {d.strftime(DATE_FORMAT)}\n\n", encoding="utf-8")
+    logger.info("已自动创建最简日记文件: %s", path.name)
+    return path
+
+
 def append_memo(memo, recorded_at: Optional[datetime] = None) -> None:
     """
     将处理后的语音备忘录追加写入当天 Obsidian 日记。
-    - 文件不存在：抛出 FileNotFoundError
+    - 文件不存在：自动调用 ensure_journal_exists() 创建
     - 无 '## 语音记录' 章节：在文件末尾追加章节和条目
     - 章节已存在：在章节内末尾追加条目
     """
     path = _journal_path(recorded_at)
     if not path.exists():
-        raise FileNotFoundError(f"当天日记文件不存在，请先在 Obsidian 中创建: {path}")
+        path = ensure_journal_exists(recorded_at)
 
     entry = _format_entry(memo, recorded_at)
     content = path.read_text(encoding="utf-8")
