@@ -42,7 +42,7 @@ class ProcessedMemo:
 
 ## Obsidian 写入规则
 - 目标：`OBSIDIAN_JOURNAL_DIR` 下以当天日期命名的 `.md` 文件
-- 日记文件不存在：不创建，抛出异常，等待重试
+- 日记文件不存在：调用 `ensure_journal_exists()` 自动创建（见下）
 - 写入位置：`## 语音记录` 章节内，`---` 分隔线之前
 - 章节不存在：自动在文件末尾创建
 - 每条记录格式：
@@ -54,6 +54,14 @@ class ProcessedMemo:
   **原始转写**
   {原始转写文字}
   ```
+
+## 自动创建日记（ensure_journal_exists）
+日记文件不存在时，`obsidian.py` 的 `ensure_journal_exists()` 按以下顺序处理：
+1. 调用 `open "obsidian://daily-notes?vault=<VaultName>"` 触发 Obsidian 内置 Daily Notes 插件
+   - Vault 名称从 `OBSIDIAN_VAULT_DIR` 路径末段自动推导，无需额外配置
+2. 轮询等待最多 10 秒（每 0.5s 检查一次）让 Obsidian 创建文件
+3. 超时或 URI 失败 → 兜底创建最简 `# YYYY-MM-DD\n\n` 格式文件
+- 前提：Obsidian 处于运行状态时优先走插件路径（保留模板等设置）；未运行时直接走兜底
 
 ## 数据库 Schema
 `~/.listen_watch/processed.db` 表 `processed_files`：
