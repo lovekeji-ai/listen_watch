@@ -36,5 +36,10 @@ logs/
 processed/
 # 实际 plist 含本机路径，不提交；使用 install.sh 生成
 com.keji.listen-watch.plist
+com.keji.listen-watch-watchdog.plist
 # app bundle 含本机路径，由 install.sh 生成
 listen_watch.app/
+# 个人文档，不提交
+*.md
+!README.md
+!CLAUDE.md

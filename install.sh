@@ -65,4 +65,20 @@ osascript -e "tell application \"System Events\" to make login item at end with 
   && echo "✓ 已添加到登录项" \
   || echo "⚠ 请手动添加：系统设置 → 通用 → 登录项 → 选择 $APP_PATH"
 
+# ── Watchdog：每天凌晨检查主进程是否存活 ──────────────────────────────────
+WATCHDOG_LABEL="com.keji.listen-watch-watchdog"
+WATCHDOG_PLIST="$HOME/Library/LaunchAgents/$WATCHDOG_LABEL.plist"
+
+echo "→ 安装 watchdog launchd agent ..."
+sed "s|YOUR_HOME|$HOME|g" "$PROJECT_DIR/com.keji.listen-watch-watchdog.plist.example" \
+  > "$WATCHDOG_PLIST"
+
+# 若已加载则先卸载（避免重复）
+launchctl list "$WATCHDOG_LABEL" &>/dev/null \
+  && launchctl unload "$WATCHDOG_PLIST" 2>/dev/null || true
+
+launchctl load "$WATCHDOG_PLIST" \
+  && echo "✓ watchdog 已加载（每天凌晨 00:00 自动检查）" \
+  || echo "⚠ watchdog 加载失败，请手动运行: launchctl load $WATCHDOG_PLIST"
+
 echo "✓ 完成。"

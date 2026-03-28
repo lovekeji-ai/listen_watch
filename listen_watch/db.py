@@ -142,6 +142,12 @@ def mark_success(path: Path) -> None:
     logger.debug("标记成功: %s", path.name)
 
 
+def mark_skipped(path: Path) -> None:
+    """标记文件主动跳过（如转写为空），不再重试。"""
+    _set_status(path, "skipped")
+    logger.debug("标记跳过: %s", path.name)
+
+
 def mark_failed(path: Path) -> None:
     """标记文件处理失败（下次启动时会重试）。"""
     _set_status(path, "failed")
@@ -174,7 +180,7 @@ def get_unprocessed(directory: Path) -> list:
         done = {
             row["file_path"]
             for row in conn.execute(
-                "SELECT file_path FROM processed_files WHERE status = 'success'"
+                "SELECT file_path FROM processed_files WHERE status IN ('success', 'skipped')"
             ).fetchall()
         }
     try:

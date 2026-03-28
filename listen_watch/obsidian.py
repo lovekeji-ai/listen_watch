@@ -1,7 +1,7 @@
 import os
+import re
+import json
 import logging
-import subprocess
-import time
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -12,6 +12,36 @@ JOURNAL_DIR = os.getenv("OBSIDIAN_JOURNAL_DIR", "")
 DATE_FORMAT = os.getenv("OBSIDIAN_DATE_FORMAT", "%Y-%m-%d")
 SECTION_HEADING = "## 语音记录"
 VAULT_DIR = os.getenv("OBSIDIAN_VAULT_DIR", "")
+
+
+def _vault_root(journal_dir: str) -> Optional[Path]:
+    """从 journal_dir 向上查找包含 .obsidian 的 vault 根目录。"""
+    path = Path(journal_dir).resolve()
+    while path != path.parent:
+        if (path / ".obsidian").exists():
+            return path
+        path = path.parent
+    return None
+
+
+def _apply_template(template_path: Path, date: datetime) -> str:
+    """读取模板文件，替换 Templater 和 Templates 插件的日期变量，返回处理后内容。"""
+    if not template_path.exists():
+        return ""
+    content = template_path.read_text(encoding="utf-8")
+
+    def replace_tp_date(m: re.Match) -> str:
+        fmt = (m.group(1)
+               .replace("YYYY", "%Y").replace("MM", "%m").replace("DD", "%d")
+               .replace("HH", "%H").replace("mm", "%M").replace("ss", "%S"))
+        return date.strftime(fmt)
+
+    # Templater: <% tp.date.now("YYYY-MM-DD") %>
+    content = re.sub(r'<%[- ]?\s*tp\.date\.now\("([^"]+)"\)\s*[- ]?%>', replace_tp_date, content)
+    # 内置 Templates 插件: {{date}} {{time}}
+    content = content.replace("{{date}}", date.strftime("%Y-%m-%d"))
+    content = content.replace("{{time}}", date.strftime("%H:%M"))
+    return content
 
 
 def _journal_path(date: Optional[datetime] = None) -> Path:
@@ -49,43 +79,41 @@ def _format_entry(memo, recorded_at: Optional[datetime] = None) -> str:
 def ensure_journal_exists(date: Optional[datetime] = None) -> Path:
     """
     确保当天日记文件存在。
-    1. 先尝试通过 Obsidian URI scheme 触发内置 Daily Notes 插件创建（需 Obsidian 在运行）
-    2. 等待最多 10 秒让文件出现
-    3. 超时则自动创建最简 .md 文件作为兜底
+    1. 从 vault 读取 daily-notes.json 获取模板路径
+    2. 替换模板中的 Templater/Templates 日期变量后写入文件
+    3. 模板不可用时降级为最简 # YYYY-MM-DD 文件
     返回日记文件路径（文件必然存在）。
     """
     path = _journal_path(date)
     if path.exists():
         return path
 
-    logger.info("当天日记文件不存在，尝试通过 Obsidian 创建: %s", path)
-
-    # 从 OBSIDIAN_VAULT_DIR 推断 Vault 名称（URI 需要）
-    vault_name = Path(VAULT_DIR).name if VAULT_DIR else ""
-    uri = "obsidian://daily-notes"
-    if vault_name:
-        uri += f"?vault={vault_name}"
-
-    try:
-        subprocess.run(["open", uri], check=True, timeout=5)
-        logger.info("已触发 Obsidian Daily Notes 插件: %s", uri)
-
-        # 轮询等待 Obsidian 创建文件，最多等待 10 秒
-        for _ in range(20):
-            time.sleep(0.5)
-            if path.exists():
-                logger.info("Obsidian 已创建日记文件: %s", path.name)
-                return path
-
-        logger.warning("等待 Obsidian 创建日记超时（10s），改为自动创建")
-    except Exception as e:
-        logger.warning("触发 Obsidian URI 失败: %s，改为自动创建", e)
-
-    # 兜底：创建最简 .md 文件
     d = date or datetime.now()
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(f"# {d.strftime(DATE_FORMAT)}\n\n", encoding="utf-8")
-    logger.info("已自动创建最简日记文件: %s", path.name)
+    logger.info("当天日记文件不存在，正在创建: %s", path)
+
+    content = ""
+    vault = _vault_root(JOURNAL_DIR)
+    if vault:
+        cfg_path = vault / ".obsidian" / "daily-notes.json"
+        if cfg_path.exists():
+            try:
+                cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+                template_rel = cfg.get("template", "")
+                if template_rel:
+                    template_path = vault / (template_rel + ".md")
+                    content = _apply_template(template_path, d)
+                    if content:
+                        logger.info("已应用日记模板: %s", template_rel)
+            except Exception as e:
+                logger.warning("读取模板配置失败: %s", e)
+
+    if not content:
+        content = f"# {d.strftime(DATE_FORMAT)}\n\n"
+        logger.info("模板不可用，已创建最简日记文件")
+
+    path.write_text(content, encoding="utf-8")
+    logger.info("日记文件已创建: %s", path.name)
     return path
 
 

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.keji.listen-watch-watchdog</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>YOUR_HOME/Code/listen_watch/.venv/bin/python3</string>
+        <string>YOUR_HOME/Code/listen_watch/watchdog.py</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>YOUR_HOME/Code/listen_watch</string>
+
+    <!-- 系统启动时立即检查一次 -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- 每小时检查一次（同时触发 VoiceMemos iCloud 同步） -->
+    <key>StartInterval</key>
+    <integer>3600</integer>
+
+    <key>StandardOutPath</key>
+    <string>YOUR_HOME/.listen_watch/watchdog.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>YOUR_HOME/.listen_watch/watchdog.log</string>
+</dict>
+</plist>

@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 from mutagen.mp4 import MP4, MP4StreamInfoError
 from listen_watch.watcher import VoiceMemoWatcher
 from listen_watch.db import (
-    init_db, is_processed, mark_success, mark_failed, get_unprocessed,
+    init_db, is_processed, mark_success, mark_skipped, mark_failed, get_unprocessed,
     get_transcription, get_ai_result, save_transcription, save_ai_result,
     save_file_info,
 )
@@ -54,6 +54,10 @@ VOICE_MEMOS_DIR = os.getenv(
 MAX_TRANSCRIBE_MINUTES = float(os.getenv("MAX_TRANSCRIBE_MINUTES", "10"))
 
 RETRY_DELAYS = [5, 15, 45]  # 指数退避间隔（秒）
+
+
+class EmptyTranscriptionError(Exception):
+    """音频转写结果为空，应主动跳过而非重试。"""
 
 
 # ── 工具函数 ──────────────────────────────────────────────────────
@@ -141,6 +145,9 @@ def _process_once(path: Path) -> None:
         save_transcription(path, text)
         logger.info("转写结果: %s", text)
 
+    if not text or not text.strip():
+        raise EmptyTranscriptionError(f"转写结果为空: {path.name}")
+
     # 阶段 2：AI 处理（有缓存则跳过 Kimi 调用）
     memo = get_ai_result(path)
     if memo:
@@ -157,7 +164,34 @@ def _process_once(path: Path) -> None:
     append_memo(memo, recorded_at=recorded_at)
 
 
-def on_new_memo(path: Path) -> None:
+def _get_today_unprocessed() -> list:
+    """返回今天录制的、尚未成功处理的音频文件列表。"""
+    today = datetime.now().date()
+    result = []
+    for p in get_unprocessed(Path(VOICE_MEMOS_DIR)):
+        recorded_at = parse_recorded_at(p)
+        if recorded_at:
+            file_date = recorded_at.date()
+        else:
+            try:
+                file_date = datetime.fromtimestamp(p.stat().st_mtime).date()
+            except OSError:
+                continue
+        if file_date == today:
+            result.append(p)
+    return result
+
+
+def _check_today_files() -> None:
+    """检查并处理今天录制的所有未处理语音文件（写入后触发的补漏扫描）。"""
+    missed = _get_today_unprocessed()
+    if missed:
+        logger.info("补漏扫描：发现 %d 个今日未处理文件", len(missed))
+        for p in missed:
+            on_new_memo(p, _check_missed=False)
+
+
+def on_new_memo(path: Path, _check_missed: bool = True) -> None:
     """新录音文件就绪后的处理入口，含重复检测和指数退避重试。"""
     if is_processed(path):
         logger.info("已处理过，跳过: %s", path.name)
@@ -197,6 +231,12 @@ def on_new_memo(path: Path) -> None:
         try:
             _process_once(path)
             mark_success(path)
+            if _check_missed:
+                _check_today_files()
+            return
+        except EmptyTranscriptionError:
+            mark_skipped(path)
+            logger.info("转写为空，已跳过（不重试）: %s", path.name)
             return
         except Exception as e:
             last_error = e
