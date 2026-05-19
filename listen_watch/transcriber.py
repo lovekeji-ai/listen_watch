@@ -18,6 +18,7 @@ QUERY_URL = "https://openspeech.bytedance.com/api/v3/auc/bigmodel/query"
 
 CODE_SUCCESS = 20000000
 CODE_PROCESSING = 20000001
+CODE_SILENT_AUDIO = 20000003  # 豆包判定音频无有效语音内容
 
 POLL_INTERVAL = 3    # 轮询间隔（秒）
 POLL_MAX_WAIT = 300  # 最长等待时间（秒）
@@ -92,6 +93,10 @@ def _submit(audio_url: str, request_id: str) -> None:
             raise RuntimeError(f"提交转写任务失败: {data}")
 
 
+class SilentAudioError(Exception):
+    """豆包判定音频没有有效语音内容（终态，无需重试）。"""
+
+
 def _poll(request_id: str) -> str:
     """
     轮询直到转写完成，返回转写文本。
@@ -116,6 +121,8 @@ def _poll(request_id: str) -> str:
         if status_code == str(CODE_PROCESSING):
             logger.debug("转写进行中... (%ds)", waited)
             continue
+        if status_code == str(CODE_SILENT_AUDIO):
+            raise SilentAudioError(resp.headers.get("X-Api-Message", "silent audio"))
         # 其他状态码视为失败
         raise RuntimeError(
             f"转写失败: X-Api-Status-Code={status_code} X-Api-Message={resp.headers.get('X-Api-Message')} body={resp.text}"
@@ -154,7 +161,11 @@ def transcribe(path: Path) -> str:
     对调用方透明：多次仍空才把空字符串返回。
     """
     for attempt in range(EMPTY_RETRY_MAX + 1):
-        text = _transcribe_once(path)
+        try:
+            text = _transcribe_once(path)
+        except SilentAudioError as e:
+            logger.info("豆包判定为静音音频，不重试: %s (%s)", path.name, e)
+            return ""
         if text.strip():
             return text
         if attempt < EMPTY_RETRY_MAX:

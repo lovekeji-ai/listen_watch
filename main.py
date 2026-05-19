@@ -225,6 +225,7 @@ def on_new_memo(path: Path, _check_missed: bool = True) -> None:
             duration / 60,
             MAX_TRANSCRIBE_MINUTES,
         )
+        mark_skipped(path)
         return
 
     if MIN_TRANSCRIBE_SECONDS > 0 and duration is not None and duration < MIN_TRANSCRIBE_SECONDS:
