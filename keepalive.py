@@ -25,7 +25,7 @@ log = logging.getLogger(__name__)
 
 def trigger_sync():
     """后台激活 VoiceMemos，触发 iCloud CloudKit 同步"""
-    subprocess.Popen(["open", "-g", "-a", "Voice Memos"])
+    subprocess.Popen(["open", "-g", "-b", "com.apple.VoiceMemos"])
     log.info("已触发 VoiceMemos iCloud 同步")
 
 
