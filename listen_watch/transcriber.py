@@ -113,11 +113,12 @@ def _poll(request_id: str) -> str:
     raise TimeoutError(f"转写超时（>{POLL_MAX_WAIT}s）")
 
 
-def transcribe(path: Path) -> str:
-    """
-    主入口：上传音频到 OSS → 提交豆包转写 → 轮询结果 → 删除 OSS 临时文件。
-    返回转写文本，失败时抛出异常。
-    """
+EMPTY_RETRY_MAX = 2          # 豆包返回空时的额外重试次数（总共最多调用 1 + EMPTY_RETRY_MAX 次）
+EMPTY_RETRY_DELAY = 3        # 每次空返回后的等待秒数
+
+
+def _transcribe_once(path: Path) -> str:
+    """单次完整调用：上传 OSS → 提交 → 轮询 → 删 OSS。返回豆包给的文本（可能为空）。"""
     oss_key = None
     try:
         logger.info("上传音频到 OSS: %s", path.name)
@@ -134,3 +135,23 @@ def transcribe(path: Path) -> str:
     finally:
         if oss_key:
             _delete_from_oss(oss_key)
+
+
+def transcribe(path: Path) -> str:
+    """
+    主入口：上传音频到 OSS → 提交豆包转写 → 轮询结果 → 删除 OSS 临时文件。
+    豆包偶发会对非空音频返回空文本（API 抖动），此处在 transcriber 层内做有限次重试，
+    对调用方透明：多次仍空才把空字符串返回。
+    """
+    for attempt in range(EMPTY_RETRY_MAX + 1):
+        text = _transcribe_once(path)
+        if text.strip():
+            return text
+        if attempt < EMPTY_RETRY_MAX:
+            logger.warning(
+                "豆包返回空文本（第 %d/%d 次），%d 秒后重试: %s",
+                attempt + 1, EMPTY_RETRY_MAX + 1, EMPTY_RETRY_DELAY, path.name,
+            )
+            time.sleep(EMPTY_RETRY_DELAY)
+    logger.warning("豆包多次返回空文本，按空结果处理: %s", path.name)
+    return ""

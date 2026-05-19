@@ -52,6 +52,7 @@ VOICE_MEMOS_DIR = os.getenv(
     str(Path.home() / "Library/Group Containers/group.com.apple.VoiceMemos.shared/Recordings"),
 )
 MAX_TRANSCRIBE_MINUTES = float(os.getenv("MAX_TRANSCRIBE_MINUTES", "10"))
+MIN_TRANSCRIBE_SECONDS = float(os.getenv("MIN_TRANSCRIBE_SECONDS", "3"))
 
 RETRY_DELAYS = [5, 15, 45]  # 指数退避间隔（秒）
 
@@ -224,6 +225,14 @@ def on_new_memo(path: Path, _check_missed: bool = True) -> None:
             duration / 60,
             MAX_TRANSCRIBE_MINUTES,
         )
+        return
+
+    if MIN_TRANSCRIBE_SECONDS > 0 and duration is not None and duration < MIN_TRANSCRIBE_SECONDS:
+        logger.info(
+            "文件时长 %.1fs 低于阈值 %.0fs，跳过转写: %s",
+            duration, MIN_TRANSCRIBE_SECONDS, path.name,
+        )
+        mark_skipped(path)
         return
 
     last_error = None
