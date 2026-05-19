@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-listen_watch 守护进程
-每天凌晨 00:00 由 launchd 调用，检查主进程是否存活，未运行则拉起 listen_watch.app
+listen_watch keepalive 脚本
+launchd 每小时调用：触发 VoiceMemos iCloud 同步，并检查主进程是否存活，未运行则拉起 listen_watch.app。
+注意：文件名不能叫 watchdog.py，否则会遮蔽同名 pip 库导致 main.py 启动失败。
 """
 import subprocess
 import logging

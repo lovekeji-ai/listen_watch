@@ -8,7 +8,7 @@
     <key>ProgramArguments</key>
     <array>
         <string>YOUR_HOME/Code/listen_watch/.venv/bin/python3</string>
-        <string>YOUR_HOME/Code/listen_watch/watchdog.py</string>
+        <string>YOUR_HOME/Code/listen_watch/keepalive.py</string>
     </array>
 
     <key>WorkingDirectory</key>
