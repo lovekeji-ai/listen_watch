@@ -126,12 +126,42 @@ def get_memo_title(path: Path) -> Optional[str]:
 
 
 # ── 核心处理 ──────────────────────────────────────────────────────
+def _transcribe_with_fallback(path: Path) -> str:
+    """主路：豆包；豆包抛异常或返回空 → 用本地 whisper 兜底（若已配置）。"""
+    from listen_watch.transcriber import transcribe as doubao_transcribe
+    from listen_watch import local_whisper
+
+    primary_error: Optional[Exception] = None
+    text = ""
+    try:
+        text = doubao_transcribe(path)
+    except Exception as e:
+        primary_error = e
+        logger.warning("豆包转写异常: %s", e)
+
+    if text and text.strip():
+        return text
+
+    if not local_whisper.is_enabled():
+        if primary_error is not None:
+            raise primary_error
+        return text  # 主路成功但内容为空，且未配置兜底 → 维持空
+
+    logger.info("豆包结果不可用，启用本地 whisper 兜底: %s", path.name)
+    try:
+        return local_whisper.transcribe(path)
+    except Exception as e:
+        logger.error("本地 whisper 兜底也失败: %s", e)
+        if primary_error is not None:
+            raise primary_error
+        raise
+
+
 def _process_once(path: Path) -> None:
     """
     执行完整处理流程（转写 → AI → 写入 Obsidian），各阶段结果独立缓存。
     重试时已完成的阶段直接读缓存，不重复调用 API。
     """
-    from listen_watch.transcriber import transcribe
     from listen_watch.processor import process
     from listen_watch.obsidian import append_memo
 
@@ -142,7 +172,7 @@ def _process_once(path: Path) -> None:
     if text:
         logger.info("使用缓存转写结果: %s", path.name)
     else:
-        text = transcribe(path)
+        text = _transcribe_with_fallback(path)
         save_transcription(path, text)
         logger.info("转写结果: %s", text)
 
