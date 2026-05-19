@@ -93,7 +93,15 @@ def _submit(audio_url: str, request_id: str) -> None:
 
 
 def _poll(request_id: str) -> str:
-    """轮询直到转写完成，返回转写文本。"""
+    """
+    轮询直到转写完成，返回转写文本。
+
+    豆包 query 接口处理过程中也会返回 result.text="" + 空 audio_info（不是 None），
+    所以不能用 result.text 判断终态——必须看 HTTP 响应头 X-Api-Status-Code：
+      20000001 = 处理中（继续轮询）
+      20000000 = 完成（返回 result.text）
+      其他     = 错误
+    """
     headers = _make_headers(request_id)
     waited = 0
     while waited < POLL_MAX_WAIT:
@@ -101,15 +109,17 @@ def _poll(request_id: str) -> str:
         waited += POLL_INTERVAL
         resp = requests.post(QUERY_URL, json={}, headers=headers, timeout=30)
         resp.raise_for_status()
-        data = resp.json()
-        # result.text 存在即转写完成
-        if data.get("result", {}).get("text") is not None:
-            return data["result"]["text"]
-        code = int(data.get("resp", {}).get("code", CODE_PROCESSING))
-        if code == CODE_PROCESSING:
+        status_code = resp.headers.get("X-Api-Status-Code", "")
+        if status_code == str(CODE_SUCCESS):
+            data = resp.json()
+            return data.get("result", {}).get("text", "")
+        if status_code == str(CODE_PROCESSING):
             logger.debug("转写进行中... (%ds)", waited)
             continue
-        raise RuntimeError(f"转写失败: {data}")
+        # 其他状态码视为失败
+        raise RuntimeError(
+            f"转写失败: X-Api-Status-Code={status_code} X-Api-Message={resp.headers.get('X-Api-Message')} body={resp.text}"
+        )
     raise TimeoutError(f"转写超时（>{POLL_MAX_WAIT}s）")
 
 
