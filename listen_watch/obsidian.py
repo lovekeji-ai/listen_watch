@@ -60,10 +60,12 @@ def _format_entry(memo, recorded_at: Optional[datetime] = None) -> str:
     heading = f"### {time_str}"
     if memo.memo_title:
         heading += f" · {memo.memo_title}"
-    heading += f" · {memo.title}"
+    if memo.title:
+        heading += f" · {memo.title}"
     lines = [heading, ""]
 
-    lines += [f"> {memo.summary}", ""]
+    if memo.summary:
+        lines += [f"> {memo.summary}", ""]
 
     if memo.todos:
         lines += ["**待办事项**"]

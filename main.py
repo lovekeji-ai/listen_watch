@@ -11,7 +11,7 @@ from mutagen.mp4 import MP4, MP4StreamInfoError
 from listen_watch.watcher import VoiceMemoWatcher
 from listen_watch.db import (
     init_db, is_processed, mark_success, mark_skipped, mark_failed, get_unprocessed,
-    get_transcription, get_ai_result, save_transcription, save_ai_result,
+    get_transcription, save_transcription,
     save_file_info,
 )
 
@@ -159,10 +159,10 @@ def _transcribe_with_fallback(path: Path) -> str:
 
 def _process_once(path: Path) -> None:
     """
-    执行完整处理流程（转写 → AI → 写入 Obsidian），各阶段结果独立缓存。
-    重试时已完成的阶段直接读缓存，不重复调用 API。
+    执行处理流程（转写 → 写入 Obsidian）。
+    不再调用 AI 提取标题/摘要/待办，原文转写直接落盘。
     """
-    from listen_watch.processor import process
+    from listen_watch.processor import ProcessedMemo
     from listen_watch.obsidian import append_memo
 
     recorded_at = parse_recorded_at(path)
@@ -179,19 +179,18 @@ def _process_once(path: Path) -> None:
     if not text or not text.strip():
         raise EmptyTranscriptionError(f"转写结果为空: {path.name}")
 
-    # 阶段 2：AI 处理（有缓存则跳过 Kimi 调用）
-    memo = get_ai_result(path)
-    if memo:
-        logger.info("使用缓存 AI 结果: %s", path.name)
-    else:
-        memo = process(text)
-        memo.original_text = text
-        memo.memo_title = get_memo_title(path)
-        save_ai_result(path, memo)
-        if memo.memo_title:
-            logger.info("录音标题: %s", memo.memo_title)
+    memo_title = get_memo_title(path) or ""
+    if memo_title:
+        logger.info("录音标题: %s", memo_title)
+    memo = ProcessedMemo(
+        title="",
+        summary="",
+        todos=[],
+        cleaned_text="",
+        original_text=text,
+        memo_title=memo_title,
+    )
 
-    # 阶段 3：写入 Obsidian（每次重试都会重新执行）
     append_memo(memo, recorded_at=recorded_at)
 
 
