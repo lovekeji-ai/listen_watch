@@ -73,7 +73,7 @@ def _format_entry(memo, recorded_at: Optional[datetime] = None) -> str:
             lines.append(f"- [ ] {todo}")
         lines.append("")
 
-    lines += ["**原始转写**", memo.original_text, ""]
+    lines += [memo.original_text, ""]
 
     return "\n".join(lines)
 
